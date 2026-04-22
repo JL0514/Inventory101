@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Inventory Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: { extend: { fontFamily: { sans: ['Space Grotesk','sans-serif'], mono: ['JetBrains Mono','monospace'] } } }
+        }
+    </script>
+    <style>
+        :root {
+            --bg:#0b0d13;--surface:#13161f;--surface-2:#1a1e2b;--surface-3:#222738;
+            --accent:#e8a023;--accent-hover:#f2b33c;--accent-dim:rgba(232,160,35,0.12);
+            --text:#e2e5ed;--text-muted:#5f6779;--border:#262a38;
+            --success:#34d399;--warning:#fbbf24;--danger:#f87171;
+        }
+        *{box-sizing:border-box}
+        body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--text);margin:0;min-height:100vh}
+        ::-webkit-scrollbar{width:6px;height:6px}
+        ::-webkit-scrollbar-track{background:var(--surface)}
+        ::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:3px}
+        ::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
+        .accent-line{height:3px;background:linear-gradient(90deg,#e8a023,#f06543,#e8a023,#f06543,#e8a023);background-size:300% 100%;animation:sg 6s ease infinite}
+        @keyframes sg{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+        .bg-blob{position:fixed;border-radius:50%;filter:blur(120px);opacity:.07;pointer-events:none;z-index:0}
+        .bg-blob-1{width:600px;height:600px;background:#e8a023;top:-200px;right:-150px;animation:bf 20s ease-in-out infinite}
+        .bg-blob-2{width:500px;height:500px;background:#f06543;bottom:-150px;left:-100px;animation:bf 25s ease-in-out infinite reverse}
+        @keyframes bf{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-20px) scale(1.05)}66%{transform:translate(-20px,15px) scale(.95)}}
+        .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 20px;transition:all .3s;position:relative;overflow:hidden}
+        .stat-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,var(--accent-dim) 0%,transparent 60%);opacity:0;transition:opacity .3s}
+        .stat-card:hover::before{opacity:1}
+        .stat-card:hover{border-color:rgba(232,160,35,.3);transform:translateY(-2px)}
+        .inv-table{width:100%;border-collapse:separate;border-spacing:0}
+        .inv-table thead th{background:var(--surface-2);padding:10px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5;white-space:nowrap;text-align:left}
+        .inv-table thead th:first-child{border-radius:8px 0 0 0}
+        .inv-table thead th:last-child{border-radius:0 8px 0 0}
+        .inv-table tbody tr{transition:background .15s}
+        .inv-table tbody tr:hover{background:var(--surface-2)}
+        .inv-table tbody td{padding:9px 12px;font-size:13px;border-bottom:1px solid var(--border);white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis}
+        .inv-table tbody td.cell-wrap{white-space:normal;max-width:260px;line-height:1.4}
+        .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:500;white-space:nowrap}
+        .badge-expired{background:rgba(248,113,113,.12);color:#f87171}
+        .badge-expiring{background:rgba(251,191,36,.12);color:#fbbf24}
+        .badge-active{background:rgba(52,211,153,.12);color:#34d399}
+        .badge-na{background:rgba(107,114,128,.15);color:#6b7280}
+        .btn{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;border-radius:10px;font-size:13px;font-weight:600;font-family:inherit;border:none;cursor:pointer;transition:all .2s;white-space:nowrap}
+        .btn:active{transform:scale(.97)}
+        .btn-primary{background:var(--accent);color:#0b0d13}
+        .btn-primary:hover{background:var(--accent-hover);box-shadow:0 0 20px rgba(232,160,35,.25)}
+        .btn-ghost{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+        .btn-ghost:hover{background:var(--surface-3);border-color:var(--text-muted)}
+        .btn-danger{background:rgba(248,113,113,.12);color:#f87171;border:1px solid rgba(248,113,113,.2)}
+        .btn-danger:hover{background:rgba(248,113,113,.2)}
+        .btn-sm{padding:5px 10px;font-size:12px;border-radius:7px}
+        .btn-icon{width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-muted);cursor:pointer;transition:all .2s;font-size:13px}
+        .btn-icon:hover{background:var(--surface-3);color:var(--text);border-color:var(--text-muted)}
+        .btn-icon.danger:hover{color:#f87171;border-color:rgba(248,113,113,.3);background:rgba(248,113,113,.1)}
+        .form-input{width:100%;padding:9px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;transition:border-color .2s,box-shadow .2s;outline:none}
+        .form-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+        .form-input::placeholder{color:var(--text-muted)}
+        textarea.form-input{resize:vertical;min-height:60px}
+        .form-label{display:block;font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:5px}
+        .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
+        .modal-overlay.active{opacity:1;pointer-events:auto}
+        .modal-content{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:95%;max-width:680px;max-height:90vh;overflow-y:auto;transform:translateY(20px) scale(.97);transition:transform .25s;box-shadow:0 25px 60px rgba(0,0,0,.5)}
+        .modal-overlay.active .modal-content{transform:translateY(0) scale(1)}
+        .toast-container{position:fixed;top:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:8px}
+        .toast{padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;animation:ti .35s ease;box-shadow:0 8px 24px rgba(0,0,0,.3);min-width:260px}
+        .toast.removing{animation:to .3s ease forwards}
+        .toast-success{background:#065f46;color:#a7f3d0;border:1px solid rgba(52,211,153,.2)}
+        .toast-error{background:#7f1d1d;color:#fca5a5;border:1px solid rgba(248,113,113,.2)}
+        .toast-info{background:#1e3a5f;color:#93c5fd;border:1px solid rgba(96,165,250,.2)}
+        @keyframes ti{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+        @keyframes to{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(40px)}}
+        mark{background:rgba(232,160,35,.3);color:inherit;border-radius:2px;padding:0 1px}
+        .empty-state{text-align:center;padding:60px 20px;color:var(--text-muted)}
+        .empty-state i{font-size:48px;margin-bottom:16px;opacity:.3}
+        /* Tab nav */
+        .tab-btn{padding:10px 22px;font-size:13px;font-weight:600;font-family:inherit;border:none;background:transparent;color:var(--text-muted);cursor:pointer;position:relative;transition:color .2s}
+        .tab-btn:hover{color:var(--text)}
+        .tab-btn.active{color:var(--accent)}
+        .tab-btn.active::after{content:'';position:absolute;bottom:0;left:12px;right:12px;height:2px;background:var(--accent);border-radius:2px 2px 0 0}
+        /* Chart card */
+        .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;transition:border-color .3s}
+        .chart-card:hover{border-color:rgba(232,160,35,.2)}
+        .chart-card h3{font-size:13px;font-weight:600;color:var(--text-muted);margin:0 0 14px 0;text-transform:uppercase;letter-spacing:.04em}
+        /* Dash big stat */
+        .dash-stat{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 24px;display:flex;align-items:center;gap:16px;transition:all .3s;position:relative;overflow:hidden}
+        .dash-stat:hover{border-color:rgba(232,160,35,.3);transform:translateY(-1px)}
+        .dash-stat .icon-wrap{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+        .dash-stat .val{font-size:28px;font-weight:700;line-height:1}
+        .dash-stat .lbl{font-size:12px;color:var(--text-muted);margin-top:2px}
+        @media print{body{background:white!important;color:black!important}.no-print{display:none!important}.inv-table thead th{background:#f3f4f6!important;color:#111!important;border-color:#d1d5db!important}.inv-table tbody td{color:#111!important;border-color:#e5e7eb!important;white-space:normal!important;max-width:none!important}.inv-table tbody tr:hover{background:transparent!important}.badge{border:1px solid #ccc}}
+        @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+    </style>
+</head>
+<body>
+    <div class="bg-blob bg-blob-1"></div>
+    <div class="bg-blob bg-blob-2"></div>
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="relative z-10 min-h-screen flex flex-col">
+        <div class="accent-line"></div>
+
+        <!-- Header -->
+        <header class="no-print" style="background:var(--surface);border-bottom:1px solid var(--border);">
+            <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-4 flex flex-col lg:flex-row lg:items-center gap-4">
+                <div class="flex items-center gap-3 shrink-0">
+                    <div style="background:var(--accent-dim);border:1px solid rgba(232,160,35,.25);" class="w-10 h-10 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-server" style="color:var(--accent);font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold leading-tight">IT Inventory Manager</h1>
+                        <p class="text-xs" style="color:var(--text-muted);">Active Workstations & Assets</p>
+                    </div>
+                </div>
+                <div class="flex-1 flex flex-wrap items-center gap-2 lg:justify-end">
+                    <button class="btn btn-primary" onclick="openAddModal()"><i class="fa-solid fa-plus"></i> Add Asset</button>
+                    <button class="btn btn-ghost" onclick="exportExcel()"><i class="fa-solid fa-file-excel"></i> Excel</button>
+                    <button class="btn btn-ghost" onclick="backupData()"><i class="fa-solid fa-download"></i> Backup</button>
+                    <button class="btn btn-ghost" onclick="document.getElementById('importInput').click()"><i class="fa-solid fa-upload"></i> Import</button>
+                    <button class="btn btn-ghost" onclick="printTable()"><i class="fa-solid fa-print"></i> Print</button>
+                    <input type="file" id="importInput" accept=".json" class="hidden" onchange="importData(event)">
+                </div>
+            </div>
+            <!-- Tabs -->
+            <div style="border-top:1px solid var(--border);" class="max-w-[1600px] mx-auto w-full px-4 sm:px-6 flex gap-1">
+                <button class="tab-btn active" id="tabDash" onclick="switchView('dashboard')"><i class="fa-solid fa-chart-pie mr-2"></i>Dashboard</button>
+                <button class="tab-btn" id="tabInv" onclick="switchView('inventory')"><i class="fa-solid fa-table-list mr-2"></i>Inventory</button>
+            </div>
+        </header>
+
+        <!-- ===== DASHBOARD VIEW ===== -->
+        <div id="viewDashboard" class="flex-1 max-w-[1600px] mx-auto w-full px-4 sm:px-6 py-5">
+            <!-- Big stat cards -->
+            <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+                <div class="dash-stat">
+                    <div class="icon-wrap" style="background:var(--accent-dim);color:var(--accent);"><i class="fa-solid fa-boxes-stacked"></i></div>
+                    <div><div class="val" id="dTotal">0</div><div class="lbl">Total Assets</div></div>
+                </div>
+                <div class="dash-stat">
+                    <div class="icon-wrap" style="background:rgba(96,165,250,.1);color:#60a5fa;"><i class="fa-solid fa-laptop"></i></div>
+                    <div><div class="val" id="dLaptops">0</div><div class="lbl">Laptops</div></div>
+                </div>
+                <div class="dash-stat">
+                    <div class="icon-wrap" style="background:rgba(52,211,153,.1);color:#34d399;"><i class="fa-solid fa-display"></i></div>
+                    <div><div class="val" id="dMonitors">0</div><div class="lbl">Monitors</div></div>
+                </div>
+                <div class="dash-stat">
+                    <div class="icon-wrap" style="background:rgba(248,113,113,.1);color:#f87171;"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                    <div><div class="val" id="dExpired">0</div><div class="lbl">Expired Warranty</div></div>
+                </div>
+                <div class="dash-stat col-span-2 lg:col-span-1">
+                    <div class="icon-wrap" style="background:rgba(251,191,36,.1);color:#fbbf24;"><i class="fa-solid fa-clock"></i></div>
+                    <div><div class="val" id="dExpiring">0</div><div class="lbl">Expiring Soon</div></div>
+                </div>
+            </div>
+            <!-- Charts grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+                <div class="chart-card">
+                    <h3><i class="fa-solid fa-chart-pie mr-2" style="color:var(--accent);"></i>Asset Class Distribution</h3>
+                    <div style="position:relative;height:300px;"><canvas id="chartClass"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <h3><i class="fa-solid fa-shield-halved mr-2" style="color:var(--accent);"></i>Warranty Status Overview</h3>
+                    <div style="position:relative;height:300px;"><canvas id="chartWarranty"></canvas></div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="chart-card">
+                    <h3><i class="fa-solid fa-building mr-2" style="color:var(--accent);"></i>Assets Per Employee (Top 15)</h3>
+                    <div style="position:relative;height:360px;"><canvas id="chartEmployee"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <h3><i class="fa-solid fa-tag mr-2" style="color:var(--accent);"></i>Brand Distribution</h3>
+                    <div style="position:relative;height:360px;"><canvas id="chartBrand"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== INVENTORY VIEW ===== -->
+        <div id="viewInventory" class="flex-1 max-w-[1600px] mx-auto w-full px-4 sm:px-6 py-5 hidden">
+            <!-- Mini stats row -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                <div class="stat-card">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:var(--accent-dim);"><i class="fa-solid fa-boxes-stacked text-sm" style="color:var(--accent);"></i></div>
+                        <div><div class="text-2xl font-bold" id="statTotal">0</div><div class="text-xs" style="color:var(--text-muted);">Total Assets</div></div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:rgba(96,165,250,.1);"><i class="fa-solid fa-laptop text-sm" style="color:#60a5fa;"></i></div>
+                        <div><div class="text-2xl font-bold" id="statLaptops">0</div><div class="text-xs" style="color:var(--text-muted);">Laptops</div></div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:rgba(52,211,153,.1);"><i class="fa-solid fa-display text-sm" style="color:#34d399;"></i></div>
+                        <div><div class="text-2xl font-bold" id="statMonitors">0</div><div class="text-xs" style="color:var(--text-muted);">Monitors</div></div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:rgba(248,113,113,.1);"><i class="fa-solid fa-triangle-exclamation text-sm" style="color:#f87171;"></i></div>
+                        <div><div class="text-2xl font-bold" id="statAlerts">0</div><div class="text-xs" style="color:var(--text-muted);">Warranty Alerts</div></div>
+                    </div>
+                </div>
+            </div>
+            <!-- Search & Filter -->
+            <div class="flex flex-wrap gap-3 items-center mb-4">
+                <div class="relative flex-1 min-w-[220px]">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs" style="color:var(--text-muted);"></i>
+                    <input type="text" id="searchInput" class="form-input pl-9" placeholder="Search by name, serial, brand, model..." oninput="renderTable()">
+                </div>
+                <select id="filterClass" class="form-input" style="width:auto;min-width:160px;" onchange="renderTable()"><option value="">All Asset Classes</option></select>
+                <select id="filterEmployee" class="form-input" style="width:auto;min-width:180px;" onchange="renderTable()"><option value="">All Employees</option></select>
+                <select id="filterWarranty" class="form-input" style="width:auto;min-width:150px;" onchange="renderTable()"><option value="">All Warranties</option><option value="active">Active</option><option value="expiring">Expiring Soon</option><option value="expired">Expired</option><option value="na">N/A</option></select>
+                <button class="btn btn-ghost btn-sm" onclick="clearFilters()" title="Clear all filters"><i class="fa-solid fa-xmark"></i> Clear</button>
+            </div>
+            <!-- Table -->
+            <div class="rounded-xl overflow-hidden" style="background:var(--surface);border:1px solid var(--border);">
+                <div class="overflow-x-auto" style="max-height:calc(100vh - 380px);">
+                    <table class="inv-table" id="inventoryTable">
+                        <thead><tr>
+                            <th style="width:40px;">#</th><th>Employee Name</th><th>Asset Class</th><th>Brand</th><th>Model</th><th style="font-family:'JetBrains Mono',monospace;">Serial Number</th><th>Specs</th><th>Warranty</th><th>Supplier</th><th>Remarks</th><th class="no-print" style="width:90px;">Actions</th>
+                        </tr></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+                <div id="emptyState" class="empty-state hidden"><i class="fa-solid fa-inbox block"></i><p class="text-base font-medium">No assets found</p><p class="text-sm mt-1">Try adjusting your search or filter criteria</p></div>
+            </div>
+            <div class="mt-3 flex items-center justify-between text-xs" style="color:var(--text-muted);"><span id="recordCount">Showing 0 of 0 records</span><span id="lastSaved"></span></div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal-overlay" id="formModal">
+        <div class="modal-content">
+            <div class="px-6 py-4 flex items-center justify-between" style="border-bottom:1px solid var(--border);">
+                <h2 class="text-base font-bold" id="modalTitle">Add New Asset</h2>
+                <button class="btn-icon" onclick="closeModal('formModal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="assetForm" class="px-6 py-5" onsubmit="saveItem(event)">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="sm:col-span-2"><label class="form-label">Employee Name</label><input type="text" name="employeeName" class="form-input" placeholder="e.g. Juan Dela Cruz" required></div>
+                    <div><label class="form-label">Asset Type</label><input type="text" name="assetType" class="form-input" placeholder="e.g. HW - Hardware" list="dlAssetType"><datalist id="dlAssetType"><option value="HW - Hardware"><option value="SW - Software"></datalist></div>
+                    <div><label class="form-label">Asset Class</label><input type="text" name="assetClass" class="form-input" placeholder="e.g. LT - Laptop" list="dlAssetClass"><datalist id="dlAssetClass"></datalist></div>
+                    <div><label class="form-label">Asset Brand</label><input type="text" name="assetBrand" class="form-input" placeholder="e.g. Dell" list="dlBrand"><datalist id="dlBrand"></datalist></div>
+                    <div><label class="form-label">Asset Model</label><input type="text" name="assetModel" class="form-input" placeholder="e.g. Vostro 15 5510"></div>
+                    <div class="sm:col-span-2"><label class="form-label">Serial Number</label><input type="text" name="serialNumber" class="form-input" placeholder="e.g. ABC123XYZ" style="font-family:'JetBrains Mono',monospace;"></div>
+                    <div class="sm:col-span-2"><label class="form-label">CPU / Memory / HD</label><input type="text" name="cpuMemoryHD" class="form-input" placeholder="e.g. Intel Core i5 / 16GB / 512GB SSD"></div>
+                    <div><label class="form-label">Warranty Expiration</label><input type="text" name="warrantyExpiration" class="form-input" placeholder="MM/DD/YYYY or * for N/A"></div>
+                    <div><label class="form-label">Supplier</label><input type="text" name="supplier" class="form-input" placeholder="e.g. Xymbolic" list="dlSupplier"><datalist id="dlSupplier"></datalist></div>
+                    <div class="sm:col-span-2"><label class="form-label">Remarks</label><textarea name="remarks" class="form-input" placeholder="Additional notes..." rows="2"></textarea></div>
+                </div>
+                <div class="flex justify-end gap-3 mt-6 pt-4" style="border-top:1px solid var(--border);">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('formModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveBtn"><i class="fa-solid fa-check"></i> Save Asset</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Modal -->
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal-content" style="max-width:420px;">
+            <div class="px-6 py-5 text-center">
+                <div class="w-14 h-14 rounded-full mx-auto mb-4 flex items-center justify-center" style="background:rgba(248,113,113,.1);"><i class="fa-solid fa-trash text-xl" style="color:#f87171;"></i></div>
+                <h2 class="text-base font-bold mb-2">Delete Asset</h2>
+                <p class="text-sm mb-1" style="color:var(--text-muted);">Are you sure you want to delete this asset?</p>
+                <p class="text-sm font-medium truncate" id="deleteItemName" style="color:var(--text);"></p>
+            </div>
+            <div class="flex gap-3 px-6 pb-5">
+                <button class="btn btn-ghost flex-1" onclick="closeModal('deleteModal')">Cancel</button>
+                <button class="btn btn-danger flex-1" onclick="executeDelete()"><i class="fa-solid fa-trash"></i> Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ===== DATA ===== */
+        const RAW_DATA = `Abigail Eclarino|HW - Hardware|LT - Laptop|Dell|Vostro 15 5510|8GMBWG3|Intel Core i5-11320H / 16GB DDR4, 3200Mhz / 512GB SSD|08/25/2025|MNLiestung|Resigned
+Abigail Eclarino|HW - Hardware|Monitor|Asus|Zenscreen|S/N: N9LMTF024957|N/A|*|Aceworks|Defective
+Abigail Eclarino|HW - Hardware|Printer - Laser|HP|LaserJet Pro|PHMYP03257|N/A|12/22/2024|Xymbolic|Resigned
+Abigail Eclarino|HW - Hardware|Monitor|Lenovo|Thinkvision|V5PKZ773|N/A|*|Xymbolic|Resigned
+Arnel Delos Santos|HW - Hardware|LT - Laptop|Lenovo|Thinkpad|PW04JBBX|Intel Core i5-1235U G12 / 8GB DDR4 3200Mhz / 1TB SSD|2026/4/5|Zenshin|w/laptop bag & cable lock; former Romy
+Arnel Delos Santos|HW - Hardware|Monitor|Asus|Zenscreen|S/N: N9LMTF024930|N/A|*|Aceworks|*
+Arnel Delos Santos|HW - Hardware|Accessories|Kensington|Kensington Lock|N/A|N/A|*|Xymbolic|*
+Bernard C. Mascariña, Jr|HW - Hardware|LT - Laptop|Dell|Vostro 15 3510|HRN4BL3|Intel Core i5-1135G7 / 8GB / 512GB SSD|04/28/2024|Gurlavi|w/laptop bag (former Cecile>Gian)
+Bernard C. Mascariña, Jr|HW - Hardware|LT - Laptop|Lenovo|ThinkPad|PF57XRFM|Intel Core Ultra 7 155H / 16GB / 1TB SSD|*|Xymbolic|w/laptop bag
+Bernard C. Mascariña, Jr|HW - Hardware|Mouse|Logitech|Lightspeed|SN-2305LZM1ZX39|N/A|*|Xymbolic|w/battery
+Bernard C. Mascariña, Jr|HW - Hardware|Monitor|Asus|Zenscreen|S/N: N9LMTF024974|N/A|*|Aceworks|*
+Bernard C. Mascariña, Jr|HW - Hardware|Accessories|Kensington|Kensington Lock|N/A|N/A|*|Xymbolic|*
+Cecilia Teodoro|HW - Hardware|LT - Laptop|Lenovo|Thinkpad|PW0350GP|Intel Core i5-1235U G12 / 16GB DDR4 3200Mhz / 512GB SSD|09/25/2025|Zenshin|w/laptop bag
+Cecilia Teodoro|HW - Hardware|Printer - Dot Matrix|Epson|LQ-310|R9FYJ07937|N/A|*|Xymbolic|w/data cable
+Cecilia Teodoro|HW - Hardware|Monitor|Lenovo|Thinkvision|63CFMARXP|N/A|*|Xymbolic|w/HDMI cable
+Danica Domingo|HW - Hardware|LT - Laptop|Dell|Vostro 15 5510|8GMBWG3|Intel Core i5-11320H / 16GB DDR4, 3200Mhz / 512GB SSD|08/25/2025|MNLiestung|former Abigail Eclarino's unit
+Danica Domingo|HW - Hardware|Printer - Laser|HP|LaserJet Pro|PHMYP03257|N/A|12/22/2024|Xymbolic|former Abigail Eclarino's unit
+Danica Domingo|HW - Hardware|Monitor|Lenovo|Thinkvision|V5PKZ773|N/A|*|Xymbolic|former Abigail Eclarino's unit
+JAM Paclibar|HW - Hardware|LT - Laptop|Dell|Vostro 15 5510|G0PBWG3|Intel Core i5-11320H / 16GB DDR4, 3200Mhz / 512GB SSD|07/27/2025|Gurlavi|w/laptop bag; former Earl
+Earl Villarin|HW - Hardware|Accessories|Kensington|Kensington Lock|N/A|N/A|*|Xymbolic|*
+Edward Ruanto|HW - Hardware|LT - Laptop|Dell|Vostro 15 5510|FXPBWG3|Intel Core i5-11320H / 16GB DDR4, 3200Mhz / 512GB SSD|2025/6/9|MNLiestung|w/laptop bag - issued to Nicolo Meer
+Edward Ruanto|HW - Hardware|XHD - External HDD|Seagate|One Touch - STKZ5000403|NABVDH3T|*|*|Aceworks|for backup of HHIC files
+Edward Ruanto|HW - Hardware|XHD - External HDD|Seagate|One Touch - STKZ5000403|NABVDHEL|*|*|Aceworks|for backup of HHIC files
+Edward Ruanto|HW - Hardware|Monitor|Asus|Zenscreen|S/N: R4LMTF204548|N/A|*|Xymbolic|former Romy Ramos
+Edward Ruanto|HW - Hardware|Monitor|Asus|Zenscreen|S/N: N9LMTF024953|N/A|*|Aceworks|physical damaged not covered by warranty
+Edward Ruanto|HW - Hardware|Accessories|Kensington|Kensington Lock|N/A|N/A|*|Xymbolic|*
+Edward Ruanto|HW - Hardware|Mobile|Apple|iPhone 11 Black 64GB|DX3MM0PBN735|IMEI 352417943056184|*|SMART/PLDT|*
+Edwin De Vera|HW - Hardware|LT - Laptop|Dell|Vostro 15 3510|H4YX9L3|Intel Core i5-1135G7 / 8GB DDR4, 2666Mhz / 512GB SSD|05/20/2024|Gurlavi|w/laptop bag
+Edwin De Vera|HW - Hardware|Monitor|Asus|Zenscreen|S/N: N9LMTF024971|N/A|*|Aceworks|*
+Edwin De Vera|HW - Hardware|Accessories|Kensington|Kensington Lock|N/A|N/A|*|Xymbolic|*
+Edwin De Vera|HW - Hardware|Monitor|Lenovo|Thinkvision|V5PKZ774|N/A|*|Xymbolic|*
+Edwin De Vera|HW - Hardware|Mobile|Apple|iPhone 11 Black 64GB|DX3MN97CN735|IME 352417944612522|*|SMART/PLDT|w/SIM (Old)
+Enrico Leonelli|HW - Hardware|Mobile|Apple|iPhone 13 Midnight 128GB|H3QJN126HR|N/A|*|SMART/PLDT|w/SIM
+Francis Fugen|HW - Hardware|LT - Laptop|Lenovo|Thinkpad|PW04JBDL|Intel Core i5-1235U G12 / 8GB DDR4 3200Mhz / 1TB SSD|2026/4/5|Zenshin|w/laptop bag & cable lock
+Francis Fugen|HW - Hardware|Monitor|Asus|Zenscreen|S/N: N9LMTF024978|N/A|*|Aceworks|*
+Francis Fugen|HW - Hardware|Accessories|Kensington|Kensington Lock|N/A|N/A|*|Xymbolic|*
+Francis Fugen|HW - Hardware|Monitor|Lenovo|Thinkvision|VYD53892|N/A|*|Xymbolic|*
+Francis Fugen|HW - Hardware|Mobile|Apple|iPhone 13 Starlight 128GB|M66N7NXY5T|IME 350308476411718|*|SMART/PLDT|w/SIM (Old)
+Geraldine Reyes|HW - Hardware|LT - Laptop|Lenovo|Thinkpad|PW04JB44|Intel Core i5-1235U G12 / 8GB DDR4 3200Mhz / 1TB SSD|2026/4/5|Zenshin|w/laptop bag & cable lock
+Geraldine Reyes|HW - Hardware|Monitor|Asus|Zenscreen|S/N: R4LMTF204559|N/A|*|Xymbolic|*
+Geraldine Reyes|HW - Hardware|Mouse|Logitech|Lightspeed|SN-2305LZM1ZMQ9|N/A|*|Xymbolic|w/battery
+Geraldine Reyes|HW - Hardware|Accessories|Kensington|Kensington Lock|N/A|N/A|*|Xymbolic|*
+Hendrix C. Bongalon|HW - Hardware|LT - Laptop|Lenovo|Thinkpad|PF-4K9V7C|Intel Core i7-1355U / 16GB DDR4, 3200Mhz / 1TB SSD|01/31/2027|Xymbolic|w/laptop bag
+Hendrix C. Bongalon|HW - Hardware|Mouse|Logitech|M170|2240LZD2DY19|N/A|*|Xymbolic|w/battery
+Hendrix C. Bongalon|HW - Hardware|Mobile|Apple|iPhone 11 Black 64GB|FFWML6JFN735|N/A|*|SMART/PLDT|w/SIM
+Kamille Grace L. Bueno|HW - Hardware|LT - Laptop|Lenovo|Thinkpad|PF-4TRAB6|Intel Core i7-1355U / 16GB DDR4, 3200Mhz / 1TB SSD|01/31/2027|Xymbolic|w/laptop bag
+Kamille Grace L. Bueno|HW - Hardware|Mouse|Logitech|M170|2334AP01LD89|N/A|*|Xymbolic|w/battery
+Kamille Grace L. Bueno|HW - Hardware|Monitor|Asus|Zenscreen|R7LMTF088943|N/A|*|Xymbolic|*
+Kamille Grace L. Bueno|HW - Hardware|Monitor|Lenovo|Thinkvision T24i-30|V5PKZ807|N/A|*|Xymbolic|*
+Kamille Grace L. Bueno|HW - Hardware|Mobile|Apple|iPhone 11 Black 64GB|FFWM57WRN735|N/A|*|SMART/PLDT|w/SIM
+JAM Paclibar|HW - Hardware|LT - Laptop|Dell|Vostro 15 5510|CBPBWG3|Intel Core i5-11320H / 16GB DDR4, 3200Mhz / 512GB SSD|2025/6/9|MNLiestung|Charger has been replaced and assigned temporarily to GIN; spare unit
+JAM Paclibar|HW - Hardware|Mouse|Logitech|Lightspeed|SN-2305LZM1ZX19|N/A|*|Xymbolic|w/battery
+JAM Paclibar|HW - Hardware|Monitor|Asus|Zenscreen|S/N: N9LMTF024973|N/A|*|Aceworks|*
+JAM Paclibar|HW - Hardware|Accessories|Kensington|Kensington Lock|N/A|N/A|*|Xymbolic|*
+Jhun Orayan|HW - Hardware|LT - Laptop|Dell|Vostro 15 3510|1FV4BL3|Intel Core i5-1135G7 / 8GB DDR4 3200Mhz / 512GB SSD|04/28/2024|Gurlavi|w/laptop bag (former Glenda)
+Jhun Orayan|HW - Hardware|Monitor|Asus|Zenscreen|S/N: N9LMTF024987|N/A|*|Aceworks|*
+Jhun Orayan|HW - Hardware|Accessories|Kensington|Kensington Lock|N/A|N/A|*|Xymbolic|*
+Jim Lababo|HW - Hardware|LT - Laptop|Dell|Vostro 15 5510|FZPBWG3|Intel Core i5-11320H / 16GB DDR4, 3200Mhz / 512GB SSD|07/27/2025|Gurlavi|w/laptop bag; former Francis
+Jim Lababo|HW - Hardware|Mouse|Logitech|Lightspeed|SN-2305LZM1ZWF9|N/A|*|Xymbolic|w/battery
+Jim Lababo|HW - Hardware|Monitor|Asus|Zenscreen|S/N: R4LMTF204579|N/A|*|Xymbolic|*
+Jim Lababo|HW - Hardware|Monitor|Lenovo|Thinkvision T24i-30|V5PKZ803|*|*|*|*
+Jim Lababo|HW - Hardware|Accessories|Kensington|Kensington Lock|N/A|N/A|*|Xymbolic|*
+Jonathan Nunez|HW - Hardware|LT - Laptop|Lenovo|Thinkpad|PF-4TY5JE|Intel Core i7-1355U / 16GB DDR4, 3200Mhz / 1TB SSD|01/31/2027|Xymbolic|w/laptop bag
+Jonathan Nunez|HW - Hardware|Mouse|Logitech|M170|2240LZD38488|N/A|*|Xymbolic|w/battery
+Jonathan Nunez|HW - Hardware|Mobile|Apple|iPhone 11 Black 64GB|DX3MM13MN735|N/A|*|SMART/PLDT|w/SIM
+Lamberto Nicolo Meer|HW - Hardware|LT - Laptop|Dell|Vostro 15 5510|FXPBWG3|Intel Core i5-11320H / 16GB DDR4, 3200Mhz / 512GB SSD|2025/6/9|MNLiestung|w/laptop bag - former Edward Ruanto
+Liza Castaneda|HW - Hardware|LT - Laptop|Dell|Vostro 15 5510|5TMBWG3|Intel Core i5-11320H / 16GB DDR4, 3200Mhz / 512GB SSD|09/22/2025|Aceworks|w/laptop bag
+Liza Castaneda|HW - Hardware|Monitor|Asus|Zenscreen|S/N: N9LMTF024988|N/A|*|Aceworks|*
+Liza Castaneda|HW - Hardware|Accessories|Kensington|Kensington Lock|N/A|N/A|*|Xymbolic|*
+Liza Castaneda|HW - Hardware|Mobile|Apple|iPhone 11 Black 64GB|FFWMNAWDN735|IMEI 352417946713674|*|SMART/PLDT|*
+Lorvico R. Tolentino|HW - Hardware|LT - Laptop|Lenovo|Thinkpad|PF-4TY3BY|Intel Core i7-1355U / 16GB DDR4, 3200Mhz / 1TB SSD|01/31/2027|Xymbolic|w/laptop bag
+Lorvico R. Tolentino|HW - Hardware|Mouse|Logitech|M170|2334AP01LD59|N/A|*|Xymbolic|w/battery
+Lorvico R. Tolentino|HW - Hardware|Mobile|Apple|iPhone 11 Black 64GB|FFWML7A2N735|N/A|*|SMART/PLDT|w/SIM
+Mark Millan|HW - Hardware|LT - Laptop|Dell|Vostro 15 5510|34QBWG3|Intel Core i5-11320H / 16GB DDR4, 3200Mhz / 512GB SSD|07/27/2025|Gurlavi|w/laptop bag; original tagged as defective on-board mic
+Marlon Manalo|HW - Hardware|LT - Laptop|Lenovo|Thinkpad|PF57YNN9|LenovoThinkPad E16 Gen1|*|Xymbolic|w/laptop bag
+Marlon Manalo|HW - Hardware|Mouse|Logitech|M171|*|N/A|*|Xymbolic|*
+Marlon Manalo|HW - Hardware|Mobile|Apple|iPhone 11 Black 64GB|DX3MM3UKN735|N/A|*|SMART/PLDT|w/SIM
+Michelle Regala-Niebres|HW - Hardware|LT - Laptop|Lenovo|Thinkpad|PF57X9CY|LenovoThinkPad E16 Gen2|*|Xymbolic|w/laptop bag
+Michelle Regala-Niebres|HW - Hardware|Mouse|Lenovo|530 Wireless Mouse|GY5OZ18984Z13NADLM|N/A|*|Xymbolic|w/battery
+Michelle Regala-Niebres|HW - Hardware|Mobile|Apple|iPhone 13 Midnight 128GB|GV4NP73YL7|IMEI 358293806031463|*|SMART/PLDT|w/SIM
+Mishaelle Shaskia Castro|HW - Hardware|LT - Laptop|Lenovo|Thinkpad|PF57ZGTY|LenovoThinkPad E16 Gen2|*|Xymbolic|w/laptop bag
+Mishaelle Shaskia Castro|HW - Hardware|Mouse|Logitech|M171|2310AP01YVB8|N/A|*|Xymbolic|w/battery
+Mishaelle Shaskia Castro|HW - Hardware|Monitor|Lenovo|Thinkvision T24i-30|V5PKZ802|N/A|*|Xymbolic|*
+Princess Marie B. Coll|HW - Hardware|LT - Laptop|Lenovo|Thinkpad|PF-4TY13N|Intel Core i7-1355U / 16GB DDR4, 3200Mhz / 1TB SSD|01/31/2027|Xymbolic|w/laptop bag
+Princess Marie B. Coll|HW - Hardware|Mouse|Logitech|M170|2240LZD2FSN9|N/A|*|Xymbolic|w/battery
+Princess Marie B. Coll|HW - Hardware|Monitor|Lenovo|Thinkvision T24i-30|V5PKZ799|N/A|*|Xymbolic|*
+Compliance Support (TJ)|HW - Hardware|LT - Laptop|Dell|Vostro 15 3510|JWN4BL3|Intel Core i5-1135G7 / 8GB DDR4, 2666Mhz / 512GB SSD|04/20/2024|Gurlavi|w/laptop bag; former EV; used by Temp Staff
+TJ|HW - Hardware|Monitor|Asus|Zenscreen|S/N: N9LMTF024913|N/A|*|Aceworks|formerly used by Earl
+Spare Laptop - IT|HW - Hardware|LT - Laptop|Dell|Vostro 15 3510|GQD5BL3|Intel Core i5-1135G7 / 8GB DDR4, 2666Mhz / 512GB SSD|04/26/2024|Gurlavi|w/laptop bag; former MM; fixed by Gurlavi under warranty; temporary assignment to Mishaelle
+Spare Laptop - Finance|HW - Hardware|LT - Laptop|Dell|Vostro 15 5510|CVPBWG3|Intel Core i5-11320H / 16GB DDR4, 3200Mhz / 512GB SSD|08/25/2025|MNLiestung|w/laptop bag; former Arnel DS; former Marlon`;
+
+        function parseRawData(raw) {
+            return raw.trim().split('\n').map(line => {
+                const p = line.split('|');
+                return { employeeName:p[0]||'', assetType:p[1]||'', assetClass:p[2]||'', assetBrand:p[3]||'', assetModel:p[4]||'', serialNumber:p[5]||'', cpuMemoryHD:p[6]||'', warrantyExpiration:p[7]||'', supplier:p[8]||'', remarks:p[9]||'' };
+            });
+        }
+
+        const FIELDS = ['employeeName','assetType','assetClass','assetBrand','assetModel','serialNumber','cpuMemoryHD','warrantyExpiration','supplier','remarks'];
+        const STORAGE_KEY = 'it_inventory_data';
+        const LAST_SAVED_KEY = 'it_inventory_last_saved';
+        const HEADERS = ['Employee Name','Asset Type','Asset Class','Asset Brand','Asset Model','Serial Number','CPU/Memory/HD','Support Warranty Expiration','Supplier','Remarks'];
+
+        let data = [];
+        let editingIndex = -1;
+        let deleteIndex = -1;
+        let currentView = 'dashboard';
+        let chartInstances = {};
+
+        /* ===== INIT ===== */
+        function initData() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].employeeName !== undefined) {
+                        data = parsed;
+                    } else { data = parseRawData(RAW_DATA); saveToStorage(); }
+                } catch (e) { data = parseRawData(RAW_DATA); saveToStorage(); }
+            } else { data = parseRawData(RAW_DATA); saveToStorage(); }
+        }
+
+        function saveToStorage() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            localStorage.setItem(LAST_SAVED_KEY, new Date().toLocaleString());
+        }
+
+        /* ===== DATE ===== */
+        function parseDate(str) {
+            if (!str || str.trim()==='*' || str.trim()==='') return null;
+            const p = str.trim().split('/');
+            if (p.length!==3) return null;
+            const n = p.map(Number);
+            if (n.some(isNaN)) return null;
+            if (n[0]>100) return new Date(n[0],n[1]-1,n[2]);
+            return new Date(n[2],n[0]-1,n[1]);
+        }
+
+        function getWarrantyInfo(dateStr) {
+            if (!dateStr || dateStr.trim()==='*' || dateStr.trim()==='') return {status:'na',label:'N/A',cls:'badge-na'};
+            const d = parseDate(dateStr);
+            if (!d || isNaN(d.getTime())) return {status:'na',label:'N/A',cls:'badge-na'};
+            const now = new Date(); now.setHours(0,0,0,0);
+            const diff = Math.ceil((d-now)/(864e5));
+            if (diff<0) return {status:'expired',label:'Expired',cls:'badge-expired'};
+            if (diff<90) return {status:'expiring',label:diff+'d left',cls:'badge-expiring'};
+            return {status:'active',label:'Active',cls:'badge-active'};
+        }
+
+        /* ===== VIEW SWITCHING ===== */
+        function switchView(view) {
+            currentView = view;
+            document.getElementById('viewDashboard').classList.toggle('hidden', view !== 'dashboard');
+            document.getElementById('viewInventory').classList.toggle('hidden', view !== 'inventory');
+            document.getElementById('tabDash').classList.toggle('active', view === 'dashboard');
+            document.getElementById('tabInv').classList.toggle('active', view === 'inventory');
+            if (view === 'dashboard') renderDashboard();
+            else renderTable();
+        }
+
+        /* ===== DASHBOARD ===== */
+        function renderDashboard() {
+            // Stats
+            const laptops = data.filter(d => d.assetClass === 'LT - Laptop').length;
+            const monitors = data.filter(d => d.assetClass === 'Monitor').length;
+            let expired = 0, expiring = 0;
+            data.forEach(d => { const w = getWarrantyInfo(d.warrantyExpiration); if (w.status==='expired') expired++; if (w.status==='expiring') expiring++; });
+
+            document.getElementById('dTotal').textContent = data.length;
+            document.getElementById('dLaptops').textContent = laptops;
+            document.getElementById('dMonitors').textContent = monitors;
+            document.getElementById('dExpired').textContent = expired;
+            document.getElementById('dExpiring').textContent = expiring;
+
+            // Destroy old charts
+            Object.values(chartInstances).forEach(c => { if (c) c.destroy(); });
+            chartInstances = {};
+
+            // Chart colors
+            const palette = ['#e8a023','#f06543','#34d399','#60a5fa','#c084fc','#fb923c','#f472b6','#a3e635','#22d3ee','#e879f9','#fbbf24','#4ade80','#818cf8','#f87171','#2dd4bf'];
+
+            // 1. Asset Class Distribution (Doughnut)
+            const classCounts = {};
+            data.forEach(d => { const c = d.assetClass || 'Unknown'; classCounts[c] = (classCounts[c]||0) + 1; });
+            const classLabels = Object.keys(classCounts);
+            const classValues = Object.values(classCounts);
+            chartInstances.class = new Chart(document.getElementById('chartClass'), {
+                type: 'doughnut',
+                data: { labels: classLabels, datasets: [{ data: classValues, backgroundColor: palette.slice(0, classLabels.length), borderWidth: 0, hoverOffset: 8 }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, cutout: '55%',
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#e2e5ed', font: { family: 'Space Grotesk', size: 11 }, padding: 10, boxWidth: 14, boxHeight: 14, borderRadius: 3, useBorderRadius: true } },
+                        tooltip: { backgroundColor: '#1a1e2b', titleColor: '#e2e5ed', bodyColor: '#e2e5ed', borderColor: '#262a38', borderWidth: 1, cornerRadius: 8, titleFont: { family: 'Space Grotesk' }, bodyFont: { family: 'Space Grotesk' }, callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} asset${ctx.raw!==1?'s':''}` } }
+                    }
+                }
+            });
+
+            // 2. Warranty Status (Doughnut)
+            const wCounts = { Active: 0, Expiring: 0, Expired: 0, 'N/A': 0 };
+            data.forEach(d => { const w = getWarrantyInfo(d.warrantyExpiration); if (w.status==='active') wCounts.Active++; else if (w.status==='expiring') wCounts.Expiring++; else if (w.status==='expired') wCounts.Expired++; else wCounts['N/A']++; });
+            const wLabels = Object.keys(wCounts);
+            const wValues = Object.values(wCounts);
+            const wColors = ['#34d399','#fbbf24','#f87171','#4b5563'];
+            chartInstances.warranty = new Chart(document.getElementById('chartWarranty'), {
+                type: 'doughnut',
+                data: { labels: wLabels, datasets: [{ data: wValues, backgroundColor: wColors, borderWidth: 0, hoverOffset: 8 }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, cutout: '55%',
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#e2e5ed', font: { family: 'Space Grotesk', size: 11 }, padding: 10, boxWidth: 14, boxHeight: 14, borderRadius: 3, useBorderRadius: true } },
+                        tooltip: { backgroundColor: '#1a1e2b', titleColor: '#e2e5ed', bodyColor: '#e2e5ed', borderColor: '#262a38', borderWidth: 1, cornerRadius: 8, titleFont: { family: 'Space Grotesk' }, bodyFont: { family: 'Space Grotesk' }, callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} asset${ctx.raw!==1?'s':''}` } }
+                    }
+                }
+            });
+
+            // 3. Assets per Employee (Horizontal Bar, Top 15)
+            const empCounts = {};
+            data.forEach(d => { const e = d.employeeName || 'Unknown'; empCounts[e] = (empCounts[e]||0) + 1; });
+            const empSorted = Object.entries(empCounts).sort((a,b) => b[1]-a[1]).slice(0, 15);
+            chartInstances.employee = new Chart(document.getElementById('chartEmployee'), {
+                type: 'bar',
+                data: {
+                    labels: empSorted.map(e => e[0]),
+                    datasets: [{ data: empSorted.map(e => e[1]), backgroundColor: '#e8a023', borderRadius: 4, barThickness: 18, hoverBackgroundColor: '#f2b33c' }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#5f6779', font: { family: 'Space Grotesk', size: 11 }, stepSize: 1 }, border: { color: 'transparent' } },
+                        y: { grid: { display: false }, ticks: { color: '#e2e5ed', font: { family: 'Space Grotesk', size: 11 } }, border: { color: 'transparent' } }
+                    },
+                    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1a1e2b', titleColor: '#e2e5ed', bodyColor: '#e2e5ed', borderColor: '#262a38', borderWidth: 1, cornerRadius: 8, titleFont: { family: 'Space Grotesk' }, bodyFont: { family: 'Space Grotesk' }, callbacks: { label: ctx => ` ${ctx.raw} asset${ctx.raw!==1?'s':''}` } } }
+                }
+            });
+
+            // 4. Brand Distribution (Horizontal Bar)
+            const brandCounts = {};
+            data.forEach(d => { const b = d.assetBrand || 'Unknown'; brandCounts[b] = (brandCounts[b]||0) + 1; });
+            const brandSorted = Object.entries(brandCounts).sort((a,b) => b[1]-a[1]);
+            chartInstances.brand = new Chart(document.getElementById('chartBrand'), {
+                type: 'bar',
+                data: {
+                    labels: brandSorted.map(b => b[0]),
+                    datasets: [{ data: brandSorted.map(b => b[1]), backgroundColor: brandSorted.map((_,i) => palette[i % palette.length]), borderRadius: 4, barThickness: 18 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#5f6779', font: { family: 'Space Grotesk', size: 11 }, stepSize: 1 }, border: { color: 'transparent' } },
+                        y: { grid: { display: false }, ticks: { color: '#e2e5ed', font: { family: 'Space Grotesk', size: 11 } }, border: { color: 'transparent' } }
+                    },
+                    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1a1e2b', titleColor: '#e2e5ed', bodyColor: '#e2e5ed', borderColor: '#262a38', borderWidth: 1, cornerRadius: 8, titleFont: { family: 'Space Grotesk' }, bodyFont: { family: 'Space Grotesk' }, callbacks: { label: ctx => ` ${ctx.raw} asset${ctx.raw!==1?'s':''}` } } }
+                }
+            });
+        }
+
+        /* ===== INVENTORY TABLE ===== */
+        function getFilteredIndices() {
+            const search = document.getElementById('searchInput').value.toLowerCase().trim();
+            const fc = document.getElementById('filterClass').value;
+            const fe = document.getElementById('filterEmployee').value;
+            const fw = document.getElementById('filterWarranty').value;
+            return data.reduce((acc, item, idx) => {
+                if (search) { const h = FIELDS.map(f => (item[f]||'').toLowerCase()).join(' '); if (!h.includes(search)) return acc; }
+                if (fc && item.assetClass !== fc) return acc;
+                if (fe && item.employeeName !== fe) return acc;
+                if (fw) { const w = getWarrantyInfo(item.warrantyExpiration); if (w.status !== fw) return acc; }
+                acc.push(idx); return acc;
+            }, []);
+        }
+
+        function escapeHtml(s) { return s ? s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
+
+        function highlight(text, search) {
+            if (!search) return escapeHtml(text);
+            const e = escapeHtml(text);
+            const se = escapeHtml(search);
+            return e.replace(new RegExp('(' + se.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')','gi'), '<mark>$1</mark>');
+        }
+
+        function renderTable() {
+            const search = document.getElementById('searchInput').value.toLowerCase().trim();
+            const indices = getFilteredIndices();
+            const tbody = document.getElementById('tableBody');
+            const emptyState = document.getElementById('emptyState');
+
+            if (indices.length === 0) { tbody.innerHTML = ''; emptyState.classList.remove('hidden'); }
+            else {
+                emptyState.classList.add('hidden');
+                tbody.innerHTML = indices.map((di, vi) => {
+                    const item = data[di];
+                    const w = getWarrantyInfo(item.warrantyExpiration);
+                    return `<tr title="${escapeHtml(item.remarks||'')}">
+                        <td class="font-mono text-xs" style="color:var(--text-muted);">${vi+1}</td>
+                        <td class="font-medium">${highlight(item.employeeName,search)}</td>
+                        <td>${highlight(item.assetClass,search)}</td>
+                        <td>${highlight(item.assetBrand,search)}</td>
+                        <td>${highlight(item.assetModel,search)}</td>
+                        <td class="font-mono text-xs">${highlight(item.serialNumber,search)}</td>
+                        <td class="cell-wrap" title="${escapeHtml(item.cpuMemoryHD)}">${highlight(item.cpuMemoryHD,search)}</td>
+                        <td><span class="badge ${w.cls}">${w.status==='expired'?'<i class="fa-solid fa-circle-xmark" style="font-size:9px;"></i>':w.status==='expiring'?'<i class="fa-solid fa-clock" style="font-size:9px;"></i>':w.status==='active'?'<i class="fa-solid fa-circle-check" style="font-size:9px;"></i>':''} ${w.label}</span><div class="text-xs mt-0.5" style="color:var(--text-muted);">${item.warrantyExpiration}</div></td>
+                        <td>${highlight(item.supplier,search)}</td>
+                        <td class="cell-wrap" title="${escapeHtml(item.remarks)}">${highlight(item.remarks,search)}</td>
+                        <td class="no-print"><div class="flex gap-1"><button class="btn-icon" onclick="openEditModal(${di})" title="Edit" aria-label="Edit"><i class="fa-solid fa-pen-to-square"></i></button><button class="btn-icon danger" onclick="confirmDelete(${di})" title="Delete" aria-label="Delete"><i class="fa-solid fa-trash"></i></button></div></td>
+                    </tr>`;
+                }).join('');
+            }
+
+            document.getElementById('recordCount').textContent = `Showing ${indices.length} of ${data.length} records`;
+            updateInvStats();
+            const ls = localStorage.getItem(LAST_SAVED_KEY);
+            document.getElementById('lastSaved').textContent = ls ? 'Last saved: '+ls : '';
+        }
+
+        function updateInvStats() {
+            document.getElementById('statTotal').textContent = data.length;
+            document.getElementById('statLaptops').textContent = data.filter(d => d.assetClass==='LT - Laptop').length;
+            document.getElementById('statMonitors').textContent = data.filter(d => d.assetClass==='Monitor').length;
+            document.getElementById('statAlerts').textContent = data.filter(d => { const w = getWarrantyInfo(d.warrantyExpiration); return w.status==='expired'||w.status==='expiring'; }).length;
+        }
+
+        /* ===== POPULATE FILTERS ===== */
+        function populateFilters() {
+            const classes = [...new Set(data.map(d=>d.assetClass).filter(Boolean))].sort();
+            const cs = document.getElementById('filterClass');
+            const cc = cs.value;
+            cs.innerHTML = '<option value="">All Asset Classes</option>' + classes.map(c => `<option value="${escapeHtml(c)}"${c===cc?' selected':''}>${escapeHtml(c)}</option>`).join('');
+
+            const emps = [...new Set(data.map(d=>d.employeeName).filter(Boolean))].sort();
+            const es = document.getElementById('filterEmployee');
+            const ec = es.value;
+            es.innerHTML = '<option value="">All Employees</option>' + emps.map(e => `<option value="${escapeHtml(e)}"${e===ec?' selected':''}>${escapeHtml(e)}</option>`).join('');
+
+            document.getElementById('dlAssetClass').innerHTML = classes.map(c=>`<option value="${escapeHtml(c)}">`).join('');
+            const brands = [...new Set(data.map(d=>d.assetBrand).filter(Boolean))].sort();
+            document.getElementById('dlBrand').innerHTML = brands.map(b=>`<option value="${escapeHtml(b)}">`).join('');
+            const suppliers = [...new Set(data.map(d=>d.supplier).filter(Boolean))].sort();
+            document.getElementById('dlSupplier').innerHTML = suppliers.map(s=>`<option value="${escapeHtml(s)}">`).join('');
+        }
+
+        /* ===== MODALS ===== */
+        function openModal(id) { document.getElementById(id).classList.add('active'); document.body.style.overflow='hidden'; }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); document.body.style.overflow=''; }
+
+        function openAddModal() {
+            editingIndex = -1;
+            document.getElementById('modalTitle').textContent = 'Add New Asset';
+            document.getElementById('saveBtn').innerHTML = '<i class="fa-solid fa-plus"></i> Add Asset';
+            document.getElementById('assetForm').reset();
+            openModal('formModal');
+            setTimeout(() => document.querySelector('#assetForm input[name="employeeName"]').focus(), 200);
+        }
+
+        function openEditModal(index) {
+            editingIndex = index;
+            const item = data[index];
+            document.getElementById('modalTitle').textContent = 'Edit Asset';
+            document.getElementById('saveBtn').innerHTML = '<i class="fa-solid fa-check"></i> Save Changes';
+            const form = document.getElementById('assetForm');
+            FIELDS.forEach(f => { const inp = form.elements[f]; if (inp) inp.value = item[f]||''; });
+            openModal('formModal');
+        }
+
+        /* ===== CRUD ===== */
+        function saveItem(e) {
+            e.preventDefault();
+            const form = document.getElementById('assetForm');
+            const item = {};
+            FIELDS.forEach(f => { item[f] = (form.elements[f] ? form.elements[f].value : '').trim(); });
+            if (!item.employeeName) { showToast('Employee name is required','error'); return; }
+            if (editingIndex === -1) { data.push(item); showToast('Asset added successfully','success'); }
+            else { data[editingIndex] = item; showToast('Asset updated successfully','success'); }
+            saveToStorage(); populateFilters();
+            if (currentView === 'dashboard') renderDashboard(); else renderTable();
+            closeModal('formModal');
+        }
+
+        function confirmDelete(index) {
+            deleteIndex = index;
+            const item = data[index];
+            document.getElementById('deleteItemName').textContent = `${item.employeeName} — ${item.assetBrand} ${item.assetModel}`;
+            openModal('deleteModal');
+        }
+
+        function executeDelete() {
+            if (deleteIndex >= 0 && deleteIndex < data.length) {
+                data.splice(deleteIndex, 1);
+                saveToStorage(); populateFilters();
+                if (currentView === 'dashboard') renderDashboard(); else renderTable();
+                showToast('Asset deleted','info');
+            }
+            closeModal('deleteModal'); deleteIndex = -1;
+        }
+
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filterClass').value = '';
+            document.getElementById('filterEmployee').value = '';
+            document.getElementById('filterWarranty').value = '';
+            renderTable();
+        }
+
+        /* ===== EXCEL EXPORT ===== */
+        function exportExcel() {
+            const indices = getFilteredIndices();
+            const rows = indices.map(i => data[i]);
+            if (rows.length === 0) { showToast('No data to export','error'); return; }
+
+            // Build worksheet data: header row + data rows
+            const wsData = [HEADERS];
+            rows.forEach(item => {
+                wsData.push(FIELDS.map(f => item[f] || ''));
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+            // Set column widths
+            ws['!cols'] = [
+                { wch: 28 }, // Employee Name
+                { wch: 16 }, // Asset Type
+                { wch: 22 }, // Asset Class
+                { wch: 14 }, // Brand
+                { wch: 28 }, // Model
+                { wch: 26 }, // Serial Number
+                { wch: 48 }, // Specs
+                { wch: 20 }, // Warranty
+                { wch: 16 }, // Supplier
+                { wch: 50 }, // Remarks
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'IT Inventory');
+            const dateStr = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `IT_Inventory_${dateStr}.xlsx`);
+            showToast(`Exported ${rows.length} records to Excel`, 'success');
+        }
+
+        /* ===== BACKUP JSON ===== */
+        function backupData() {
+            const json = JSON.stringify(data, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `IT_Inventory_Backup_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('Backup downloaded','success');
+        }
+
+        /* ===== IMPORT ===== */
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (!Array.isArray(parsed)) { showToast('Invalid file: expected an array','error'); return; }
+                    if (!parsed.every(item => item && typeof item==='object' && item.employeeName !== undefined)) { showToast('Invalid file: records must have employeeName','error'); return; }
+                    data = parsed.map(item => { const n = {}; FIELDS.forEach(f => { n[f] = (item[f]||'').toString(); }); return n; });
+                    saveToStorage(); populateFilters();
+                    if (currentView === 'dashboard') renderDashboard(); else renderTable();
+                    showToast(`Imported ${data.length} records`,'success');
+                } catch (err) { showToast('Failed to parse: ' + err.message, 'error'); }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        /* ===== PRINT ===== */
+        function printTable() {
+            const indices = getFilteredIndices();
+            const pd = indices.map(i => data[i]);
+            const now = new Date().toLocaleString();
+            const isF = indices.length !== data.length;
+            const win = window.open('','_blank');
+            win.document.write(`<!DOCTYPE html><html><head><title>IT Inventory Report</title>
+<style>@page{size:landscape;margin:10mm}body{font-family:Arial,Helvetica,sans-serif;padding:0;margin:0;font-size:10px;color:#111}
+h1{font-size:18px;margin:0 0 2px}.sub{color:#666;font-size:10px;margin-bottom:12px}.fn{color:#c0392b;font-size:9px;margin-bottom:8px;font-weight:bold}
+table{width:100%;border-collapse:collapse}th{background:#2c3e50;color:white;padding:6px 5px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.03em}
+td{padding:4px 5px;border-bottom:1px solid #ddd;font-size:9px;vertical-align:top}tr:nth-child(even){background:#f8f9fa}
+.mono{font-family:'Courier New',monospace;font-size:8px}.be{color:#c0392b;font-weight:bold}.bx{color:#e67e22;font-weight:bold}.ba{color:#27ae60;font-weight:bold}.bn{color:#999}</style></head><body>
+<h1>IT Inventory — Active Workstations</h1>
+<div class="sub">Generated: ${now} | Total: ${pd.length} records${isF?' (filtered from '+data.length+')':''}</div>
+ ${isF?'<div class="fn">NOTE: Filtered view. Not all records shown.</div>':''}
+<table><thead><tr><th>#</th><th>Employee Name</th><th>Asset Class</th><th>Brand</th><th>Model</th><th class="mono">Serial Number</th><th>Specs</th><th>Warranty</th><th>Supplier</th><th>Remarks</th></tr></thead><tbody>
+ ${pd.map((item,i)=>{const w=getWarrantyInfo(item.warrantyExpiration);return `<tr><td>${i+1}</td><td>${escapeHtml(item.employeeName)}</td><td>${escapeHtml(item.assetClass)}</td><td>${escapeHtml(item.assetBrand)}</td><td>${escapeHtml(item.assetModel)}</td><td class="mono">${escapeHtml(item.serialNumber)}</td><td>${escapeHtml(item.cpuMemoryHD)}</td><td><span class="b${w.status[0]}">${w.label}</span> ${escapeHtml(item.warrantyExpiration)}</td><td>${escapeHtml(item.supplier)}</td><td>${escapeHtml(item.remarks)}</td></tr>`;}).join('')}
+</tbody></table></body></html>`);
+            win.document.close();
+            setTimeout(() => win.print(), 300);
+        }
+
+        /* ===== TOAST ===== */
+        function showToast(msg, type) {
+            const c = document.getElementById('toastContainer');
+            const t = document.createElement('div');
+            t.className = `toast toast-${type||'info'}`;
+            const icon = type==='success'?'fa-circle-check':type==='error'?'fa-circle-xmark':'fa-circle-info';
+            t.innerHTML = `<i class="fa-solid ${icon}"></i> ${escapeHtml(msg)}`;
+            c.appendChild(t);
+            setTimeout(() => { t.classList.add('removing'); setTimeout(() => t.remove(), 300); }, 3000);
+        }
+
+        /* ===== KEYBOARD ===== */
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                if (document.getElementById('deleteModal').classList.contains('active')) closeModal('deleteModal');
+                else if (document.getElementById('formModal').classList.contains('active')) closeModal('formModal');
+            }
+            if ((e.ctrlKey||e.metaKey) && e.key==='n') {
+                const a = document.activeElement;
+                if (a && (a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT')) return;
+                e.preventDefault(); openAddModal();
+            }
+        });
+
+        document.getElementById('formModal').addEventListener('click', function(e) { if (e.target===this) closeModal('formModal'); });
+        document.getElementById('deleteModal').addEventListener('click', function(e) { if (e.target===this) closeModal('deleteModal'); });
+
+        /* ===== START ===== */
+        initData();
+        populateFilters();
+        renderDashboard();
+    </script>
+</body>
+</html>
